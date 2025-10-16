@@ -1,0 +1,516 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_Payment_Process" targetNamespace="http://bpmn.io/schema/bpmn" exporter="Camunda Modeler" exporterVersion="5.40.0">
+  <bpmn:process id="PaymentProcess" name="Payment Orchestration Process" isExecutable="true">
+    <bpmn:startEvent id="StartEvent_1" name="Платеж создан">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:serviceTask id="Task_CreatePayment" name="CREATE_PAYMENT" camunda:type="external" camunda:topic="create-payment">
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="Task_ValidateData" name="VALIDATE_PAYMENT_DATA" camunda:type="external" camunda:topic="validate-payment">
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_3</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:exclusiveGateway id="Gateway_Validation" name="Валидация OK?">
+      <bpmn:incoming>Flow_3</bpmn:incoming>
+      <bpmn:outgoing>Flow_ValidationOK</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ValidationFailed</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="Task_ReserveFunds" name="RESERVE_USER_FUNDS" camunda:type="external" camunda:topic="reserve-funds">
+      <bpmn:incoming>Flow_ValidationOK</bpmn:incoming>
+      <bpmn:outgoing>Flow_4</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:exclusiveGateway id="Gateway_Reserve" name="Резерв OK?">
+      <bpmn:incoming>Flow_4</bpmn:incoming>
+      <bpmn:outgoing>Flow_ReserveOK</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ReserveFailed</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="Task_DebitAccount" name="DEBIT_USER_ACCOUNT" camunda:type="external" camunda:topic="debit-account">
+      <bpmn:incoming>Flow_ReserveOK</bpmn:incoming>
+      <bpmn:outgoing>Flow_5</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="Task_FraudInternal" name="FRAUD_CHECK_INTERNAL" camunda:type="external" camunda:topic="fraud-internal">
+      <bpmn:incoming>Flow_5</bpmn:incoming>
+      <bpmn:outgoing>Flow_6</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="Task_FraudExternal" name="FRAUD_CHECK_EXTERNAL" camunda:type="external" camunda:topic="fraud-external">
+      <bpmn:incoming>Flow_6</bpmn:incoming>
+      <bpmn:outgoing>Flow_7</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:exclusiveGateway id="Gateway_FraudDecision" name="Результат?">
+      <bpmn:incoming>Flow_7</bpmn:incoming>
+      <bpmn:outgoing>Flow_FraudApproved</bpmn:outgoing>
+      <bpmn:outgoing>Flow_FraudManual</bpmn:outgoing>
+      <bpmn:outgoing>Flow_FraudRejected</bpmn:outgoing>
+      <bpmn:outgoing>Flow_FraudError</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:userTask id="Task_ManualReview" name="AWAIT_MANUAL_REVIEW">
+      <bpmn:incoming>Flow_FraudManual</bpmn:incoming>
+      <bpmn:outgoing>Flow_8</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:boundaryEvent id="Event_Timer" name="20 мин" attachedToRef="Task_ManualReview">
+      <bpmn:outgoing>Flow_TimerCutoff</bpmn:outgoing>
+      <bpmn:timerEventDefinition>
+        <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT20M</bpmn:timeDuration>
+      </bpmn:timerEventDefinition>
+    </bpmn:boundaryEvent>
+    <bpmn:serviceTask id="Task_AutoApprove" name="APPLY_CUT_OFF_TIME" camunda:type="external" camunda:topic="auto-approve">
+      <bpmn:incoming>Flow_TimerCutoff</bpmn:incoming>
+      <bpmn:outgoing>Flow_AutoToMerge</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:exclusiveGateway id="Gateway_ManualDecision" name="Решение?">
+      <bpmn:incoming>Flow_8</bpmn:incoming>
+      <bpmn:outgoing>Flow_ManualApproved</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ManualRejected</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:exclusiveGateway id="Gateway_MergeApproved">
+      <bpmn:incoming>Flow_FraudApproved</bpmn:incoming>
+      <bpmn:incoming>Flow_ManualApproved</bpmn:incoming>
+      <bpmn:incoming>Flow_AutoToMerge</bpmn:incoming>
+      <bpmn:outgoing>Flow_9</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="Task_CreditCounterparty" name="CREDIT_COUNTERPARTY&#10;PIVOT (необратимо)" camunda:type="external" camunda:topic="credit-counterparty">
+      <bpmn:incoming>Flow_9</bpmn:incoming>
+      <bpmn:outgoing>Flow_10</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="Task_UpdateSuccess" name="UPDATE_STATUS_SUCCESS" camunda:type="external" camunda:topic="update-success">
+      <bpmn:incoming>Flow_10</bpmn:incoming>
+      <bpmn:outgoing>Flow_11</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="Task_NotifySuccess" name="NOTIFY_USER_SUCCESS" camunda:type="external" camunda:topic="notify-success">
+      <bpmn:incoming>Flow_11</bpmn:incoming>
+      <bpmn:outgoing>Flow_12</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="Event_Success" name="Успешно">
+      <bpmn:incoming>Flow_12</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:exclusiveGateway id="Gateway_MergeRejected">
+      <bpmn:incoming>Flow_FraudRejected</bpmn:incoming>
+      <bpmn:incoming>Flow_FraudError</bpmn:incoming>
+      <bpmn:incoming>Flow_ManualRejected</bpmn:incoming>
+      <bpmn:outgoing>Flow_13</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="Task_RefundUser" name="REFUND_USER&#10; Компенсация" camunda:type="external" camunda:topic="refund-user">
+      <bpmn:incoming>Flow_13</bpmn:incoming>
+      <bpmn:outgoing>Flow_14</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="Task_UpdateRefunded" name="UPDATE_STATUS_REFUNDED" camunda:type="external" camunda:topic="update-refunded">
+      <bpmn:incoming>Flow_14</bpmn:incoming>
+      <bpmn:outgoing>Flow_15</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:parallelGateway id="Gateway_ParallelNotify">
+      <bpmn:incoming>Flow_15</bpmn:incoming>
+      <bpmn:outgoing>Flow_16</bpmn:outgoing>
+      <bpmn:outgoing>Flow_17</bpmn:outgoing>
+    </bpmn:parallelGateway>
+    <bpmn:serviceTask id="Task_NotifyUserFailure" name="NOTIFY_USER_FAILURE" camunda:type="external" camunda:topic="notify-failure">
+      <bpmn:incoming>Flow_16</bpmn:incoming>
+      <bpmn:outgoing>Flow_18</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="Task_NotifySecurity" name="NOTIFY_SECURITY_FRAUD" camunda:type="external" camunda:topic="notify-security">
+      <bpmn:incoming>Flow_17</bpmn:incoming>
+      <bpmn:outgoing>Flow_19</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:parallelGateway id="Gateway_JoinNotify">
+      <bpmn:incoming>Flow_18</bpmn:incoming>
+      <bpmn:incoming>Flow_19</bpmn:incoming>
+      <bpmn:outgoing>Flow_20</bpmn:outgoing>
+    </bpmn:parallelGateway>
+    <bpmn:endEvent id="Event_Refunded" name="Возврат выполнен">
+      <bpmn:incoming>Flow_20</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:exclusiveGateway id="Gateway_MergeEarlyFails">
+      <bpmn:incoming>Flow_ValidationFailed</bpmn:incoming>
+      <bpmn:incoming>Flow_ReserveFailed</bpmn:incoming>
+      <bpmn:outgoing>Flow_21</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="Task_ReleaseFunds" name="RELEASE_RESERVED_FUNDS&#10; Компенсация" camunda:type="external" camunda:topic="release-funds">
+      <bpmn:incoming>Flow_21</bpmn:incoming>
+      <bpmn:outgoing>Flow_22</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="Task_UpdateFailed" name="UPDATE_STATUS_FAILED" camunda:type="external" camunda:topic="update-failed">
+      <bpmn:incoming>Flow_22</bpmn:incoming>
+      <bpmn:outgoing>Flow_23</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="Task_NotifyFailureEarly" name="NOTIFY_USER_FAILURE" camunda:type="external" camunda:topic="notify-failure-early">
+      <bpmn:incoming>Flow_23</bpmn:incoming>
+      <bpmn:outgoing>Flow_24</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="Event_Failed" name="Отклонено">
+      <bpmn:incoming>Flow_24</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Task_CreatePayment" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Task_CreatePayment" targetRef="Task_ValidateData" />
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Task_ValidateData" targetRef="Gateway_Validation" />
+    <bpmn:sequenceFlow id="Flow_ValidationOK" name="OK" sourceRef="Gateway_Validation" targetRef="Task_ReserveFunds">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${validationOk == true}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_ValidationFailed" name="Ошибка" sourceRef="Gateway_Validation" targetRef="Gateway_MergeEarlyFails">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${validationOk == false}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_4" sourceRef="Task_ReserveFunds" targetRef="Gateway_Reserve" />
+    <bpmn:sequenceFlow id="Flow_ReserveOK" name="OK" sourceRef="Gateway_Reserve" targetRef="Task_DebitAccount">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${reserveOk == true}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_ReserveFailed" name="Недостаточно" sourceRef="Gateway_Reserve" targetRef="Gateway_MergeEarlyFails">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${reserveOk == false}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_5" sourceRef="Task_DebitAccount" targetRef="Task_FraudInternal" />
+    <bpmn:sequenceFlow id="Flow_6" sourceRef="Task_FraudInternal" targetRef="Task_FraudExternal" />
+    <bpmn:sequenceFlow id="Flow_7" sourceRef="Task_FraudExternal" targetRef="Gateway_FraudDecision" />
+    <bpmn:sequenceFlow id="Flow_FraudApproved" name="Одобрено" sourceRef="Gateway_FraudDecision" targetRef="Gateway_MergeApproved">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${fraudResult == 'APPROVED'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_FraudManual" name="Ручная проверка" sourceRef="Gateway_FraudDecision" targetRef="Task_ManualReview">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${fraudResult == 'MANUAL_REVIEW'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_FraudRejected" name="Отклонено" sourceRef="Gateway_FraudDecision" targetRef="Gateway_MergeRejected">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${fraudResult == 'REJECTED'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_FraudError" name="Ошибка" sourceRef="Gateway_FraudDecision" targetRef="Gateway_MergeRejected">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${fraudResult == 'ERROR'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_8" sourceRef="Task_ManualReview" targetRef="Gateway_ManualDecision" />
+    <bpmn:sequenceFlow id="Flow_TimerCutoff" sourceRef="Event_Timer" targetRef="Task_AutoApprove" />
+    <bpmn:sequenceFlow id="Flow_ManualApproved" name="Одобрено" sourceRef="Gateway_ManualDecision" targetRef="Gateway_MergeApproved">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${manualDecision == 'APPROVED'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_ManualRejected" name="Отклонено" sourceRef="Gateway_ManualDecision" targetRef="Gateway_MergeRejected">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${manualDecision == 'REJECTED'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_AutoToMerge" sourceRef="Task_AutoApprove" targetRef="Gateway_MergeApproved" />
+    <bpmn:sequenceFlow id="Flow_9" sourceRef="Gateway_MergeApproved" targetRef="Task_CreditCounterparty" />
+    <bpmn:sequenceFlow id="Flow_10" sourceRef="Task_CreditCounterparty" targetRef="Task_UpdateSuccess" />
+    <bpmn:sequenceFlow id="Flow_11" sourceRef="Task_UpdateSuccess" targetRef="Task_NotifySuccess" />
+    <bpmn:sequenceFlow id="Flow_12" sourceRef="Task_NotifySuccess" targetRef="Event_Success" />
+    <bpmn:sequenceFlow id="Flow_13" sourceRef="Gateway_MergeRejected" targetRef="Task_RefundUser" />
+    <bpmn:sequenceFlow id="Flow_14" sourceRef="Task_RefundUser" targetRef="Task_UpdateRefunded" />
+    <bpmn:sequenceFlow id="Flow_15" sourceRef="Task_UpdateRefunded" targetRef="Gateway_ParallelNotify" />
+    <bpmn:sequenceFlow id="Flow_16" sourceRef="Gateway_ParallelNotify" targetRef="Task_NotifyUserFailure" />
+    <bpmn:sequenceFlow id="Flow_17" sourceRef="Gateway_ParallelNotify" targetRef="Task_NotifySecurity" />
+    <bpmn:sequenceFlow id="Flow_18" sourceRef="Task_NotifyUserFailure" targetRef="Gateway_JoinNotify" />
+    <bpmn:sequenceFlow id="Flow_19" sourceRef="Task_NotifySecurity" targetRef="Gateway_JoinNotify" />
+    <bpmn:sequenceFlow id="Flow_20" sourceRef="Gateway_JoinNotify" targetRef="Event_Refunded" />
+    <bpmn:sequenceFlow id="Flow_21" sourceRef="Gateway_MergeEarlyFails" targetRef="Task_ReleaseFunds" />
+    <bpmn:sequenceFlow id="Flow_22" sourceRef="Task_ReleaseFunds" targetRef="Task_UpdateFailed" />
+    <bpmn:sequenceFlow id="Flow_23" sourceRef="Task_UpdateFailed" targetRef="Task_NotifyFailureEarly" />
+    <bpmn:sequenceFlow id="Flow_24" sourceRef="Task_NotifyFailureEarly" targetRef="Event_Failed" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="PaymentProcess">
+      <bpmndi:BPMNShape id="Shape_StartEvent" bpmnElement="StartEvent_1">
+        <dc:Bounds x="152" y="242" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="132" y="285" width="77" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_CreatePayment" bpmnElement="Task_CreatePayment">
+        <dc:Bounds x="240" y="220" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_ValidateData" bpmnElement="Task_ValidateData">
+        <dc:Bounds x="390" y="220" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_ValidationGateway" bpmnElement="Gateway_Validation" isMarkerVisible="true">
+        <dc:Bounds x="540" y="235" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="523" y="295" width="83" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_ReserveFunds" bpmnElement="Task_ReserveFunds">
+        <dc:Bounds x="640" y="220" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_ReserveGateway" bpmnElement="Gateway_Reserve" isMarkerVisible="true">
+        <dc:Bounds x="790" y="235" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="784" y="295" width="61" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_DebitAccount" bpmnElement="Task_DebitAccount">
+        <dc:Bounds x="890" y="220" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_FraudInternal" bpmnElement="Task_FraudInternal">
+        <dc:Bounds x="1040" y="220" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_FraudExternal" bpmnElement="Task_FraudExternal">
+        <dc:Bounds x="1190" y="220" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_FraudGateway" bpmnElement="Gateway_FraudDecision" isMarkerVisible="true">
+        <dc:Bounds x="1340" y="235" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1337" y="205" width="57" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_ManualReview" bpmnElement="Task_ManualReview">
+        <dc:Bounds x="1440" y="350" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_AutoApprove" bpmnElement="Task_AutoApprove">
+        <dc:Bounds x="1600" y="390" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_ManualGateway" bpmnElement="Gateway_ManualDecision" isMarkerVisible="true">
+        <dc:Bounds x="1465" y="485" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1464" y="542" width="53" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_MergeApproved" bpmnElement="Gateway_MergeApproved" isMarkerVisible="true">
+        <dc:Bounds x="1755" y="235" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_CreditCounterparty" bpmnElement="Task_CreditCounterparty">
+        <dc:Bounds x="1860" y="220" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_UpdateSuccess" bpmnElement="Task_UpdateSuccess">
+        <dc:Bounds x="2010" y="220" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_NotifySuccess" bpmnElement="Task_NotifySuccess">
+        <dc:Bounds x="2160" y="220" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_SuccessEnd" bpmnElement="Event_Success">
+        <dc:Bounds x="2312" y="242" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2308" y="285" width="45" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_MergeRejected" bpmnElement="Gateway_MergeRejected" isMarkerVisible="true">
+        <dc:Bounds x="1340" y="595" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_RefundUser" bpmnElement="Task_RefundUser">
+        <dc:Bounds x="1440" y="580" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_UpdateRefunded" bpmnElement="Task_UpdateRefunded">
+        <dc:Bounds x="1590" y="580" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_ParallelNotify" bpmnElement="Gateway_ParallelNotify">
+        <dc:Bounds x="1740" y="595" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_NotifyUserFailure" bpmnElement="Task_NotifyUserFailure">
+        <dc:Bounds x="1840" y="530" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_NotifySecurity" bpmnElement="Task_NotifySecurity">
+        <dc:Bounds x="1840" y="650" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_JoinNotify" bpmnElement="Gateway_JoinNotify">
+        <dc:Bounds x="1990" y="595" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_RefundedEnd" bpmnElement="Event_Refunded">
+        <dc:Bounds x="2092" y="602" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2085" y="645" width="51" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_MergeEarly" bpmnElement="Gateway_MergeEarlyFails" isMarkerVisible="true">
+        <dc:Bounds x="875" y="115" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_ReleaseFunds" bpmnElement="Task_ReleaseFunds">
+        <dc:Bounds x="1060" y="100" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_UpdateFailed" bpmnElement="Task_UpdateFailed">
+        <dc:Bounds x="1280" y="100" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_NotifyFailureEarly" bpmnElement="Task_NotifyFailureEarly">
+        <dc:Bounds x="1580" y="100" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_FailedEnd" bpmnElement="Event_Failed">
+        <dc:Bounds x="1832" y="122" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1822" y="165" width="56" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Timer" bpmnElement="Event_Timer">
+        <dc:Bounds x="1522" y="412" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1552" y="443" width="36" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Edge_Flow1" bpmnElement="Flow_1">
+        <di:waypoint x="188" y="260" />
+        <di:waypoint x="240" y="260" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow2" bpmnElement="Flow_2">
+        <di:waypoint x="340" y="260" />
+        <di:waypoint x="390" y="260" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow3" bpmnElement="Flow_3">
+        <di:waypoint x="490" y="260" />
+        <di:waypoint x="540" y="260" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ValidationOK" bpmnElement="Flow_ValidationOK">
+        <di:waypoint x="590" y="260" />
+        <di:waypoint x="640" y="260" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="605" y="242" width="16" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ValidationFailed" bpmnElement="Flow_ValidationFailed">
+        <di:waypoint x="565" y="235" />
+        <di:waypoint x="565" y="120" />
+        <di:waypoint x="895" y="120" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="722" y="85" width="41" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow4" bpmnElement="Flow_4">
+        <di:waypoint x="740" y="260" />
+        <di:waypoint x="790" y="260" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ReserveOK" bpmnElement="Flow_ReserveOK">
+        <di:waypoint x="840" y="260" />
+        <di:waypoint x="890" y="260" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="855" y="242" width="16" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ReserveFailed" bpmnElement="Flow_ReserveFailed">
+        <di:waypoint x="815" y="235" />
+        <di:waypoint x="815" y="140" />
+        <di:waypoint x="875" y="140" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="752" y="213" width="72" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow5" bpmnElement="Flow_5">
+        <di:waypoint x="990" y="260" />
+        <di:waypoint x="1040" y="260" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow6" bpmnElement="Flow_6">
+        <di:waypoint x="1140" y="260" />
+        <di:waypoint x="1190" y="260" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow7" bpmnElement="Flow_7">
+        <di:waypoint x="1290" y="260" />
+        <di:waypoint x="1340" y="260" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_FraudApproved" bpmnElement="Flow_FraudApproved">
+        <di:waypoint x="1390" y="260" />
+        <di:waypoint x="1755" y="260" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1550" y="242" width="52" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_FraudManual" bpmnElement="Flow_FraudManual">
+        <di:waypoint x="1365" y="285" />
+        <di:waypoint x="1365" y="390" />
+        <di:waypoint x="1440" y="390" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1346" y="335" width="88" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_FraudRejected" bpmnElement="Flow_FraudRejected">
+        <di:waypoint x="1365" y="285" />
+        <di:waypoint x="1365" y="595" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1326" y="437" width="56" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_FraudError" bpmnElement="Flow_FraudError">
+        <di:waypoint x="1340" y="260" />
+        <di:waypoint x="1310" y="260" />
+        <di:waypoint x="1310" y="620" />
+        <di:waypoint x="1340" y="620" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1267" y="437" width="41" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow8" bpmnElement="Flow_8">
+        <di:waypoint x="1490" y="430" />
+        <di:waypoint x="1490" y="485" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Timer" bpmnElement="Flow_TimerCutoff">
+        <di:waypoint x="1558" y="430" />
+        <di:waypoint x="1600" y="430" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_AutoToMerge" bpmnElement="Flow_AutoToMerge">
+        <di:waypoint x="1700" y="430" />
+        <di:waypoint x="1780" y="430" />
+        <di:waypoint x="1780" y="285" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ManualApproved" bpmnElement="Flow_ManualApproved">
+        <di:waypoint x="1515" y="510" />
+        <di:waypoint x="1780" y="510" />
+        <di:waypoint x="1780" y="285" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1622" y="492" width="52" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ManualRejected" bpmnElement="Flow_ManualRejected">
+        <di:waypoint x="1465" y="510" />
+        <di:waypoint x="1365" y="510" />
+        <di:waypoint x="1365" y="595" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1384" y="492" width="56" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow9" bpmnElement="Flow_9">
+        <di:waypoint x="1805" y="260" />
+        <di:waypoint x="1860" y="260" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow10" bpmnElement="Flow_10">
+        <di:waypoint x="1960" y="260" />
+        <di:waypoint x="2010" y="260" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow11" bpmnElement="Flow_11">
+        <di:waypoint x="2110" y="260" />
+        <di:waypoint x="2160" y="260" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow12" bpmnElement="Flow_12">
+        <di:waypoint x="2260" y="260" />
+        <di:waypoint x="2312" y="260" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow13" bpmnElement="Flow_13">
+        <di:waypoint x="1390" y="620" />
+        <di:waypoint x="1440" y="620" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow14" bpmnElement="Flow_14">
+        <di:waypoint x="1540" y="620" />
+        <di:waypoint x="1590" y="620" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow15" bpmnElement="Flow_15">
+        <di:waypoint x="1690" y="620" />
+        <di:waypoint x="1740" y="620" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow16" bpmnElement="Flow_16">
+        <di:waypoint x="1765" y="595" />
+        <di:waypoint x="1765" y="570" />
+        <di:waypoint x="1840" y="570" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow17" bpmnElement="Flow_17">
+        <di:waypoint x="1765" y="645" />
+        <di:waypoint x="1765" y="690" />
+        <di:waypoint x="1840" y="690" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow18" bpmnElement="Flow_18">
+        <di:waypoint x="1940" y="570" />
+        <di:waypoint x="2015" y="570" />
+        <di:waypoint x="2015" y="595" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow19" bpmnElement="Flow_19">
+        <di:waypoint x="1940" y="690" />
+        <di:waypoint x="2015" y="690" />
+        <di:waypoint x="2015" y="645" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow20" bpmnElement="Flow_20">
+        <di:waypoint x="2040" y="620" />
+        <di:waypoint x="2092" y="620" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow21" bpmnElement="Flow_21">
+        <di:waypoint x="925" y="140" />
+        <di:waypoint x="1060" y="140" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow22" bpmnElement="Flow_22">
+        <di:waypoint x="1160" y="140" />
+        <di:waypoint x="1280" y="140" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow23" bpmnElement="Flow_23">
+        <di:waypoint x="1380" y="140" />
+        <di:waypoint x="1580" y="140" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow24" bpmnElement="Flow_24">
+        <di:waypoint x="1680" y="140" />
+        <di:waypoint x="1832" y="140" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

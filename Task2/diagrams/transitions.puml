@@ -1,0 +1,107 @@
+@startuml State Transitions - Detailed View
+!theme plain
+skinparam state {
+  BackgroundColor<<Success>> LightGreen
+  BackgroundColor<<Failed>> Pink
+  BackgroundColor<<Waiting>> LightYellow
+  BackgroundColor<<Processing>> LightBlue
+}
+
+title Payment State Transitions - Detailed View
+
+[*] --> CREATED
+
+state CREATED {
+  CREATED : Платеж создан
+}
+CREATED --> VALIDATING : VALIDATE_PAYMENT_DATA
+
+state VALIDATING {
+  VALIDATING : Валидация данных
+}
+VALIDATING --> FUNDS_RESERVED : RESERVE_USER_FUNDS
+VALIDATING --> VALIDATION_FAILED : Ошибка валидации
+
+state FUNDS_RESERVED <<Processing>> {
+  FUNDS_RESERVED : Средства зарезервированы
+}
+FUNDS_RESERVED --> DEBITED : DEBIT_USER_ACCOUNT
+FUNDS_RESERVED --> VALIDATION_FAILED : Недостаточно средств
+
+state DEBITED <<Processing>> {
+  DEBITED : Средства списаны
+}
+DEBITED --> FRAUD_CHECKING : FRAUD_CHECK_INTERNAL
+
+state FRAUD_CHECKING <<Processing>> {
+  FRAUD_CHECKING : Проверка антифрод
+}
+FRAUD_CHECKING --> FRAUD_APPROVED : Проверка пройдена
+FRAUD_CHECKING --> MANUAL_REVIEW : Требуется ручная проверка
+FRAUD_CHECKING --> FRAUD_REJECTED : Fraud обнаружен
+FRAUD_CHECKING --> FRAUD_ERROR : Ошибка проверки
+
+state MANUAL_REVIEW <<Waiting>> {
+  MANUAL_REVIEW : Ожидание оператора (20 мин)
+}
+MANUAL_REVIEW --> FRAUD_APPROVED : Оператор одобрил
+MANUAL_REVIEW --> FRAUD_REJECTED : Оператор отклонил
+MANUAL_REVIEW --> AUTO_APPROVED : Cut-off time
+
+state AUTO_APPROVED <<Processing>> {
+  AUTO_APPROVED : Авто-одобрение
+}
+AUTO_APPROVED --> FRAUD_APPROVED : APPLY_CUT_OFF_TIME
+
+state FRAUD_APPROVED <<Processing>> {
+  FRAUD_APPROVED : Проверка пройдена
+}
+FRAUD_APPROVED --> CREDITED : CREDIT_COUNTERPARTY
+
+state CREDITED <<Success>> {
+  CREDITED : Перевод контрагенту
+}
+CREDITED --> SUCCESS : UPDATE_PAYMENT_STATUS_SUCCESS
+
+state SUCCESS <<Success>> {
+  SUCCESS : Платеж успешен
+}
+SUCCESS --> COMPLETED : NOTIFY_USER_SUCCESS
+
+state FRAUD_REJECTED <<Failed>> {
+  FRAUD_REJECTED : Fraud отклонил
+}
+FRAUD_REJECTED --> REFUNDING : REFUND_USER
+
+state FRAUD_ERROR <<Failed>> {
+  FRAUD_ERROR : Ошибка проверки
+}
+FRAUD_ERROR --> REFUNDING : REFUND_USER
+
+REFUNDING : Возврат средств
+REFUNDING --> REFUNDED : Возврат выполнен
+
+state REFUNDED <<Failed>> {
+  REFUNDED : Средства возвращены
+}
+REFUNDED --> FAILED : UPDATE_PAYMENT_STATUS_FAILED
+
+state VALIDATION_FAILED <<Failed>> {
+  VALIDATION_FAILED : Ошибка валидации
+}
+VALIDATION_FAILED --> RELEASING_FUNDS : RELEASE_RESERVED_FUNDS
+
+RELEASING_FUNDS : Освобождение резерва
+RELEASING_FUNDS --> FAILED : Резерв освобожден
+
+state FAILED <<Failed>> {
+  FAILED : Платеж отклонен
+}
+FAILED --> COMPLETED : NOTIFY_USER_FAILURE
+
+state COMPLETED {
+  COMPLETED : Процесс завершен
+}
+COMPLETED --> [*]
+
+@enduml
